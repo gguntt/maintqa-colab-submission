@@ -1,0 +1,16 @@
+Local public-demo validation: 2026-11-12 (Asia/Seoul)
+Python environment: existing MaintQA Python 3.14 virtual environment
+DuckDB: 2.0.0
+Test runner: Python unittest
+Tests run: 12
+Result: OK (no skipped tests)
+
+Original public-demo generator created:
+- 12 fictional documents
+- 24 fictional work lines
+- 6 fictional vessels
+- 12 unique composite document keys
+- 2 unique DOC_NO values (intentional cross-vessel duplication)
+
+This is a text record of an actual local test run, not a screenshot or a claim of GitHub Actions execution.
+The supplied classroom database was not included in this public validation package.
