@@ -4,14 +4,14 @@
 - 학번: 20220281
 - 소속: 한국해양대학교 기관시스템공학부
 
-선박 정비이력을 자연어로 질문하면 DuckDB에서 집계하거나 정비 문서를 검색해 **출처와 함께** 답하는 오프라인 챗봇입니다. Colab GPU 실습은 이와 별도로 진행했습니다.
+선박 정비이력을 자연어로 질문하면 DuckDB에서 집계하거나 정비 문서를 검색해 **출처와 함께** 답하는 오프라인 챗봇입니다. Colab GPU 실습에서는 이 챗봇의 핵심 과정(질문 → SQL 생성 → DuckDB 실행)을 T4 GPU에서 실행해 정확도와 속도를 평가했습니다.
 
 ## 제출 항목 요약
 
 | 요구사항 | 위치 | 상태 |
 |---|---|---|
 | 1. DuckDB 적용 | `app/`, `app/tests/` | 완료 — 로컬 학생용 300문서 DB 연결, 공개 재현 데이터로 테스트 12개 통과 |
-| 3. Colab GPU AI/ML·DL 실습 | `colab/`, `evidence/colab/` | 완료 — Tesla T4에서 CNN 학습, 테스트 정확도 96.31%, 화면 5장 |
+| 3. Colab GPU AI/ML·DL 실습 | `colab/`, `evidence/colab_chatbot/` | 완료 — 챗봇 LLM(gemma4:e2b)을 T4 GPU에서 실행, SQL 정확도 75%(9/12), CPU 대비 약 65배 빠름, 화면 5장 (보조: MNIST CNN 학습) |
 | 4. ChatGPT Codex 증빙 | `evidence/codex/` | Codex 대화 화면 5장 |
 | 5. 소스코드 공개 | 이 저장소 | Public |
 
@@ -64,48 +64,66 @@ python -m unittest discover -s app/tests -v
 
 모델 서버는 `127.0.0.1:50081`, 질의 서버는 `127.0.0.1:8760`을 사용하며, 설치 후에는 인터넷 없이 동작합니다.
 
-## 3. Colab GPU 실습 — MNIST 손글씨 숫자 분류
+## 3. Colab GPU 실습 — 챗봇 LLM을 GPU에서 실행·평가
 
-- 노트북: [`colab/MaintQA_Colab_GPU_MNIST.ipynb`](colab/MaintQA_Colab_GPU_MNIST.ipynb)
-- 환경: Google Colab, **Tesla T4 GPU**, PyTorch 2.14 / CUDA 13.0
-- 데이터: MNIST 공개 데이터 — 학습 12,000장, 검증 3,000장, 별도 테스트 10,000장
-- 모델: 소형 CNN(합성곱 2층 + 완전연결 2층, 파라미터 105,866개), 3 에폭, 시드 42
+내 PC에서는 그래픽카드를 쓰지 못해 챗봇의 LLM이 CPU로만 동작했습니다. 그래서 챗봇의 핵심 과정인 **질문 → SQL(DB 조회 명령문) 생성 → DuckDB 실행**을 Colab의 T4 GPU에서 그대로 재현하고, 생성된 SQL이 맞는지와 속도가 얼마나 빨라지는지 확인했습니다.
 
-| 에폭 | 학습 정확도 | 검증 정확도 |
-|---|---|---|
-| 1 | 78.60% | 90.70% |
-| 2 | 93.43% | 94.83% |
-| 3 | 96.09% | 96.33% |
+- 노트북: [`colab/MaintQA_Colab_GPU_SQL.ipynb`](colab/MaintQA_Colab_GPU_SQL.ipynb)
+- 환경: Google Colab **Tesla T4 GPU**, Ollama 0.40, DuckDB
+- 모델: `gemma4:e2b` (챗봇과 같은 모델), temperature=0·top_k=1·seed=42로 고정
+- 프롬프트: 챗봇 소스 `app/engine.py`의 SQL 생성 프롬프트(테이블 구조·규칙·예시 포함)를 그대로 사용
+- 데이터: 이 저장소의 공개용 **가상** 정비기록 12건 (수업 제공 DB는 사용·업로드하지 않음)
+- 평가 방법: 정비 질문 12개에 대해, 모델이 만든 SQL의 **실행 결과**가 사람이 작성한 정답 SQL의 결과와 같으면 정답
 
-**테스트 정확도: 96.31%** (테스트 데이터는 학습·에폭 선택에 사용하지 않음)
+### 결과
+
+| 항목 | 결과 |
+|---|---|
+| SQL 정확도 | **9/12 (75%)** |
+| 질문당 평균 응답 시간 (같은 질문 3개) | GPU **0.2초** / CPU 16.2초 → 약 65배 빠름 |
+| 초당 생성 토큰 수 | GPU **93.6개** / CPU 5.2개 |
+
+틀린 3문항은 모두 **조건을 잘못 해석한 경우**였습니다.
+- Q05 "훈련용 펌프 문서 수": 펌프 조건 없이 작업 라인 전체(24)를 셈 (정답 6)
+- Q06 "훈련용 팬 문서 수": 영어로 저장된 값(`TRAINING FAN`)을 한글 '팬'으로 검색해 0건 (정답 6)
+- Q07 "부품 소모 기록이 있는 문서 수": 선박 코드 없이 문서번호만으로 세어 1건 (정답 6)
+
+즉, 숫자를 세는 단순 질문은 잘 맞히지만 **한글 용어 ↔ DB의 영어 값 대응**과 **(선박 코드, 문서번호) 복합키**에서 실수가 나왔습니다. 실제 챗봇에서 용어 대응표(terms.json)와 SQL 실행 전 검사가 필요한 이유를 확인한 결과입니다. CPU 시간에는 모델을 CPU 메모리로 다시 올리는 시간이 일부 포함되어 있어 실제 배율은 이보다 작을 수 있습니다.
 
 | 증빙 | 내용 |
 |---|---|
-| ![](evidence/colab/01_gpu.png) | 01 GPU 연결 확인 (Tesla T4, cuda:0) |
-| ![](evidence/colab/02_data.png) | 02 데이터 분할 검증 및 샘플 시각화 |
-| ![](evidence/colab/03_training.png) | 03 모델 구조와 GPU 학습 로그 |
-| ![](evidence/colab/04_evaluation.png) | 04 테스트 평가 및 혼동행렬 |
-| ![](evidence/colab/05_visualization.png) | 05 학습 곡선과 예측 결과 |
+| ![](evidence/colab_chatbot/01_gpu_model.png) | 01 T4 GPU 확인, Ollama 설치, gemma4:e2b가 GPU 100%로 실행됨 |
+| ![](evidence/colab_chatbot/02_duckdb_data.png) | 02 챗봇 소스와 공개용 가상 DuckDB 준비, 테이블별 기록 수 |
+| ![](evidence/colab_chatbot/03_sql_generation.png) | 03 질문 12개 → SQL 생성 → DuckDB 실행 결과 |
+| ![](evidence/colab_chatbot/04_accuracy.png) | 04 정답 비교 및 정확도 시각화 (75%) |
+| ![](evidence/colab_chatbot/05_gpu_vs_cpu.png) | 05 GPU와 CPU 속도 비교 시각화 |
 
-이 실습은 MaintQA 챗봇과 별도이며, 정비 DB를 Colab에 업로드하지 않았습니다.
+### 보조 실습 — MNIST 손글씨 숫자 분류 CNN 학습
+
+GPU로 딥러닝 모델을 **직접 학습**시키는 실습도 함께 진행했습니다. (`colab/MaintQA_Colab_GPU_MNIST.ipynb`, `evidence/colab/`)
+- Tesla T4에서 소형 CNN을 3 에폭 학습, **테스트 정확도 96.31%** (학습 12,000장 / 검증 3,000장 / 테스트 10,000장)
+- 증빙: GPU 확인, 데이터 시각화, 학습 로그, 혼동행렬, 학습 곡선 (`evidence/colab/01~05`)
 
 ## 4. ChatGPT Codex 활용
 
 ChatGPT 데스크톱 앱의 Codex로 챗봇 요구사항 정리, Python/HTML 코드 구현, DuckDB 연결·적재 검증, 테스트 작성과 실행, 공개용 소스 정리를 진행했습니다. 대화 화면은 `evidence/codex/`에 있습니다.
 
-1. `01_request.png` — 챗봇 요구사항과 설계 요청
-2. `02_implementation.png` — 코드 파일 생성·수정
-3. `03_duckdb.png` — DuckDB 연결·적재 검증
-4. `04_tests.png` — 테스트 실행 결과
-5. `05_delivery.png` — 완성된 앱과 최종 결과
+| 증빙 | 내용 |
+|---|---|
+| ![](evidence/codex/01_request.png) | 01 챗봇 요구사항과 설계 요청 |
+| ![](evidence/codex/02_implementation.png) | 02 코드 구현 및 파일 수정 |
+| ![](evidence/codex/03_duckdb.png) | 03 DuckDB 연결·적재 검증 (정비 문서 300건, 6개 테이블) |
+| ![](evidence/codex/04_tests.png) | 04 테스트 작성·실행 (14개 통과) |
+| ![](evidence/codex/05_delivery.png) | 05 완성된 앱과 최종 결과 |
 
 ## 폴더 구조
 
 ```
 app/              챗봇 소스 (DuckDB, 검색, 모델 연결, 웹 화면)
 app/tests/        자동 테스트
-colab/            Colab GPU 실습 노트북
+colab/            Colab GPU 실습 노트북 (챗봇 SQL 실습, MNIST 보조 실습)
 docs/             증빙 촬영 기준, 로컬 테스트 기록
-evidence/colab/   Colab 실행 화면 5장
+evidence/colab_chatbot/  챗봇 연계 Colab 실행 화면 5장
+evidence/colab/   MNIST 보조 실습 화면 5장
 evidence/codex/   Codex 대화 화면 5장
 ```
