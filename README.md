@@ -134,3 +134,7 @@ evidence/codex/   Codex 대화 화면 5장
 ![MaintQA 실행 화면](evidence/app/PAPER-01_MaintQA_gemma4e2b_vessel_count.png)
 
 로컬 PC에서 MaintQA(gemma4:e2b)를 실행해 "선박별 정비 문서 수는 몇 건인가요?"를 질문한 화면입니다. 질문 분류(집계형) → SQL 생성 → 읽기 전용 SQL 검사 → DuckDB 실행 → 결과 표 순서로 처리되었고, 응답 시간은 5.99초입니다. 화면의 데이터는 간이·합성 데이터 300문서(DEMO DATA)로, 실제 정비 판단용이 아닙니다.
+
+![Codex와 MaintQA 함께 실행](evidence/app/PAPER-02_MaintQA_with_Codex.png)
+
+ChatGPT 데스크톱 앱의 Codex(Work) 대화(왼쪽)와, Codex 내장 브라우저로 연 MaintQA 페이지(오른쪽)를 함께 캡처한 화면입니다. 왼쪽에는 Codex가 DuckDB 연결·검증(정비 문서 300건, 작업 라인 671건)과 자동 테스트 14개 통과를 보고한 내용이, 오른쪽에는 같은 질문의 집계 결과(응답 8.24초)가 보입니다.
