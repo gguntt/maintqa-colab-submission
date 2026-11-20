@@ -127,3 +127,10 @@ evidence/colab_chatbot/  챗봇 연계 Colab 실행 화면 5장
 evidence/colab/   MNIST 보조 실습 화면 5장
 evidence/codex/   Codex 대화 화면 5장
 ```
+
+
+## 논문용 실제 앱 화면
+
+![MaintQA 실행 화면](evidence/app/PAPER-01_MaintQA_gemma4e2b_vessel_count.png)
+
+로컬 PC에서 MaintQA(gemma4:e2b)를 실행해 "선박별 정비 문서 수는 몇 건인가요?"를 질문한 화면입니다. 질문 분류(집계형) → SQL 생성 → 읽기 전용 SQL 검사 → DuckDB 실행 → 결과 표 순서로 처리되었고, 응답 시간은 5.99초입니다. 화면의 데이터는 간이·합성 데이터 300문서(DEMO DATA)로, 실제 정비 판단용이 아닙니다.
